@@ -237,7 +237,7 @@ contract Escrow {
         if(_set.inspection == false) revert inspectionFailed();
         if(!_set.sellerApprove) revert buyerUnapproves();
         if(!_set.buyerApprove) revert sellerUnapproves();
-        if(!_set.cancelSales) revert cancelledSale();
+        if(_set.cancelSales) revert cancelledSale();
 
         payable(_property.seller).transfer(sellerFee);
         IERC721(OliveEstate).transferFrom(_property.seller, _property.buyer, _property.tokenID);
@@ -245,15 +245,15 @@ contract Escrow {
         emit CompleteTransaction(_property.seller, _property.buyer, _tokenID, block.timestamp);
     }
 
-    function cancelSale(uint256 _tokenID, bool _status) public {
+    function cancelSale(uint256 _tokenID) public {
         Property storage _property = property[_tokenID];
         Set storage _set = set[_tokenID];
         if (!_set.inspection || !_set.appraisal ) {
             payable(_property.buyer).transfer(address(this).balance);
-            _set.cancelSales = _status;
+            _set.cancelSales = true;
         } else {
             payable(_property.seller).transfer(address(this).balance);
-            _set.cancelSales = _status;
+            _set.cancelSales = false;
         }
     }
 
