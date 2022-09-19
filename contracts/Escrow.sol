@@ -128,8 +128,11 @@ contract Escrow {
     mapping(uint256 => Set) public set;
     mapping(uint256 => Property) public property;
     mapping(uint256 => mapping(address => uint256)) public appCheck;
-    mapping(uint256 => mapping(address => uint256)) public inspCheck;
+    mapping(uint256 => mapping(address => uint256)) private inspCheck;
 
+    function insCheck(uint256 tokenId, address ins) external view returns(uint256) {
+        return inspCheck[tokenId][ins];
+    }
     
     function userNFTBal(address _addr) external view returns (uint256) {
         return OliveEstate.balanceOf(_addr);
@@ -137,11 +140,15 @@ contract Escrow {
 
     function listedProperty(bool _forSale, uint256 _tokenID, uint256 _propertyFee) external  {
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
+        // Set storage _set = set[_tokenID];
         require(OliveEstate.ownerOf(_tokenID) == msg.sender, "You do not own an NFT");
-        require(_property.tokenID == 0, "property has been listed");
+        require(_property.tokenID == 0, "property has been listed");        
         _property.seller = msg.sender;
-        _set.isForSale = _forSale;
+        // _set.isForSale = _forSale;
+
+        set[_tokenID].isForSale = _forSale;
+
+
         _property.propertyFee = _propertyFee;
         _property.tokenID = _tokenID;
         _property.tokenUri = OliveEstate.tokenURI(_tokenID);
@@ -151,9 +158,9 @@ contract Escrow {
 
     function buyerDeposit(address _appraiser, address _inspector, uint256 _tokenID) external payable {
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
-        uint256 escrowFee = _property.propertyFee * 20 / 100;
-        require(_set.isForSale == true, "property is not for sale");
+        // Set storage _set = set[_tokenID];
+        uint256 escrowFee = calEscrowfee(_property.propertyFee);
+        require(set[_tokenID].isForSale == true, "property is not for sale");
         require(msg.value >= escrowFee, "Escrow fee not complete");
         _property.buyer = msg.sender;
         _property.appraiser = _appraiser;
@@ -164,6 +171,14 @@ contract Escrow {
         emit BuyerDeposit(msg.sender, _property.inspector, _property.appraiser, _tokenID, msg.value, block.timestamp);
     }
 
+    function calEscrowfee(uint256 fee) internal pure returns(uint256) {
+        return fee * 20 / 100;
+    }
+
+    function calAspInspfee(uint256 fee) internal pure returns(uint256) {
+        return fee * 25 / 1000;
+    }
+
     function appraisalStatus(bool _appraisal, uint256 _tokenID) external {
         if (appCheck[_tokenID][msg.sender] == 0) {
             appCheck[_tokenID][msg.sender] = 1;
@@ -171,12 +186,13 @@ contract Escrow {
             require(appCheck[_tokenID][msg.sender] == 0, "can oly appraise once");
         }
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
-        uint256 appraisalFee = _property.propertyFee * 25 / 1000;
+        // Set storage _set = set[_tokenID];
+
+        uint256 appraisalFee = calAspInspfee(_property.propertyFee);
         require(_property.appraiser == msg.sender, "you are not the appraiser");
-        _set.appraisal = _appraisal;
+        set[_tokenID].appraisal = _appraisal;
         payable(msg.sender).transfer(appraisalFee);
-        _set.appFee = appraisalFee;
+        set[_tokenID].appFee = appraisalFee;
 
         emit AppraiserStatus(msg.sender, appraisalFee, _tokenID, block.timestamp, _appraisal);
     }
@@ -188,43 +204,43 @@ contract Escrow {
             require(inspCheck[_tokenID][msg.sender] == 0, "can oly appraise once");
         }
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
-        uint256 inspectionFee = _property.propertyFee * 25 / 1000;
+        // Set storage _set = set[_tokenID];
+        uint256 inspectionFee = calAspInspfee(_property.propertyFee);
         require(_property.inspector == msg.sender, "you are not the inspector");
-        _set.inspection = _inspection;
+        set[_tokenID].inspection = _inspection;
         payable(msg.sender).transfer(inspectionFee);
-        _set.inspFee = inspectionFee;
+        set[_tokenID].inspFee = inspectionFee;
 
         emit InspectorStatus(msg.sender, inspectionFee, _tokenID, block.timestamp, _inspection);
     }
 
     function sellerApproval(uint256 _tokenID, bool _seller) public {
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
+        // Set storage _set = set[_tokenID];
         require(msg.sender == _property.seller, "you are not the seller");
         _property.tokenID = _tokenID;
-        _set.sellerApprove = _seller;
+        set[_tokenID].sellerApprove = _seller;
 
         emit SellerApproval(msg.sender, _tokenID, _seller, block.timestamp);
     }
 
     function buyerApproval(uint256 _tokenID, bool _buyer ) public {
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
+        // Set storage _set = set[_tokenID];
         require(msg.sender == _property.buyer, "you are not the buyer");
         _property.tokenID = _tokenID;
-        _set.buyerApprove = _buyer;
+        set[_tokenID].buyerApprove = _buyer;
 
         emit BuyerApproval(msg.sender, _tokenID, _buyer, block.timestamp);
     }
 
     function buyerCompleteFees(uint256 _tokenID) external payable {
         Property storage _property = property[_tokenID];
-        Set storage _set = set[_tokenID];
+        // Set storage _set = set[_tokenID];
         uint256 ptyFee = _property.propertyFee * 80/ 100;
         if(msg.value < ptyFee) revert LowFee();
         _property.buyer = msg.sender;
-        _set.completeFee = ptyFee;
+        set[_tokenID].completeFee = ptyFee;
 
         emit BuyerCompleteFees(msg.sender, ptyFee, _tokenID, block.timestamp);
     } 
@@ -253,11 +269,9 @@ contract Escrow {
             _set.cancelSales = true;
         } else {
             payable(_property.seller).transfer(address(this).balance);
-            _set.cancelSales = false;
+            _set.cancelSales = false ;
         }
-    }
-
-    
+    }    
 
     function getEscrowBalance() external view returns (uint256) {
         return address(this).balance;
